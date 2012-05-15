@@ -114,7 +114,7 @@
       (set! number-pushes (+ 1 number-pushes))
       (set! current-depth (+ 1 current-depth))
       (set! max-depth (max current-depth max-depth)))
-    (define (pop x)
+    (define (pop)
       (if (null? s)
 	  (error "Empty stack -- POP")
 	  (let ((top (car s)))
@@ -140,6 +140,11 @@
 	    (else
 	     (error "Unknown request -- STACK" message))))
     dispatch))
+
+(define (push stack value)
+  ((stack 'push) value))
+(define (pop stack)
+  (stack 'pop))
 
 (define (assemble controller-text machine)
   (extract-labels controller-text
@@ -411,22 +416,56 @@
 ;(newline)
 ;(display (get-register-contents gcd-machine 'a))
 
-(define fact-machine
-  (make-machine
-   '(p c n)
-   (list (list '> >) (list '+ +) (list '* *))
-   '(start
-        (assign p (const 1))
-	(assign c (const 1))
-     iter-loop
-        (test (op >) (reg c) (reg n))
-	(branch (label fact-done))
-	(assign p (op *) (reg p) (reg c))
-	(assign c (op +) (reg c) (const 1))
-	(goto (label iter-loop))
-     fact-done)))
+;(define fact-machine
+;  (make-machine
+;   '(p c n)
+;   (list (list '> >) (list '+ +) (list '* *))
+;   '(start
+;       (assign p (const 1))
+;	(assign c (const 1))
+;     iter-loop
+;       (test (op >) (reg c) (reg n))
+;	(branch (label fact-done))
+;	(assign p (op *) (reg p) (reg c))
+;	(assign c (op +) (reg c) (const 1))
+;	(goto (label iter-loop))
+;     fact-done)))
+;
+;(set-register-contents! fact-machine 'n 5)
+;(start fact-machine)
+;(newline)
+;(display (get-register-contents fact-machine 'p))
 
-(set-register-contents! fact-machine 'n 10)
-(start fact-machine)
-(newline)
-(display (get-register-contents fact-machine 'p))
+;(define expt-machine
+;  (make-machine
+;   '(b n continue val)
+;   (list (list '= =)
+;	 (list '- -)
+;	 (list '* *))
+;   '(start
+;       (assign continue (label expt-done))
+;     expt-loop
+;       (test (op =) (reg n) (const 0))
+;       (branch (label base-case))
+;       (save continue)
+;       (save b)
+;       (save n)
+;       (assign n (op -) (reg n) (const 1))
+;       (assign continue (label after-expt))
+;       (goto (label expt-loop))
+;     after-expt
+;       (restore n)
+;       (restore b)
+;       (restore continue)
+;       (assign val (op *) (reg b) (reg val))
+;       (goto (reg continue))
+;     base-case
+;       (assign val (const 1))
+;       (goto (reg continue))
+;     expt-done)))
+;
+;(set-register-contents! expt-machine 'b 2)
+;(set-register-contents! expt-machine 'n 4)
+;(start expt-machine)
+;(newline)
+;(display (get-register-contents expt-machine 'val))
