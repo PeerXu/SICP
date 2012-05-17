@@ -41,7 +41,11 @@
 	   (list (list 'initialize-stack
 		       (lambda () (stack 'initialize)))
 		 (list 'print-stack-statistics
-		       (lambda () (stack 'print-statistics)))))
+		       (lambda () (stack 'print-statistics)))
+		 (list 'print
+		       (lambda (x) (display x)))
+		 (list 'prompt-read
+		       (lambda (msg) (display msg) (read)))))
 ;	   (list (list 'initialize-stack
 ;		       (lambda () (stack 'initialize)))))
 	  (register-table
@@ -396,25 +400,26 @@
 	(cadr val)
 	(error "Unknown operation -- ASSEMBLE" symbol))))
 
-;(define gcd-machine
-;  (make-machine
-;   '(a b t)
-;   (list (list 'rem remainder) (list '= =))
-;   '(test-b
-;        (test (op =) (reg b) (const 0))
-;	(branch (label gcd-done))
-;	(assign t (op rem) (reg a) (reg b))
-;	(assign a (reg b))
-;	(assign b (reg t))
-;	(goto (label test-b))
-;     gcd-done)))
+(define gcd-machine
+  (make-machine
+   '(a b t)
+   (list (list 'rem remainder) (list '= =))
+   '(gcd-loop
+        (perform (op print) (const "\n"))
+        (assign a (op prompt-read) (const "a="))
+	(assign b (op prompt-read) (const "b="))
+     test-b
+        (test (op =) (reg b) (const 0))
+	(branch (label gcd-done))
+	(assign t (op rem) (reg a) (reg b))
+	(assign a (reg b))
+	(assign b (reg t))
+	(goto (label test-b))
+     gcd-done
+        (perform (op print) (reg a))
+	(goto (label gcd-loop)))))
 
-;(set-register-contents! gcd-machine 'a 206)
-;(set-register-contents! gcd-machine 'b 40)
-;(start gcd-machine)
-;
-;(newline)
-;(display (get-register-contents gcd-machine 'a))
+(start gcd-machine)
 
 ;(define fact-machine
 ;  (make-machine
