@@ -4,7 +4,9 @@
   (make-machine
    '(a b t)
    (list (list 'rem remainder) (list '= =))
-   '(gcd-loop
+   '(start
+        (perform (op initialize-register))
+     gcd-loop
         (perform (op initialize-stack))
         (perform (op print) (const "\n"))
         (assign a (op prompt-read) (const "a="))
@@ -19,6 +21,8 @@
      gcd-done
         (perform (op print) (reg a))
 	(perform (op print-stack-statistics))
-	(goto (label gcd-loop)))))
-
+	(perform (op print) (reg cx)))))
+	
+(start gcd-machine)
+(gcd-machine 'empty-cx)
 (start gcd-machine)

@@ -3,17 +3,34 @@
     (for-each (lambda (register-name)
 		((machine 'allocate-register) register-name))
 	      register-names)
+    ((machine 'initialize))
     ((machine 'install-operations) ops)
     ((machine 'install-instruction-sequence)
      (assemble controller-text machine))
     machine))
 
 (define (make-register name)
-  (let ((contents '*unassigned*))
+  (let ((contents '*unassigned*)
+	(trace #f))
     (define (dispatch message)
       (cond ((eq? message 'get) contents)
 	    ((eq? message 'set)
-	     (lambda (value) (set! contents value)))
+	     (lambda (value)
+	       (if trace
+		   ((lambda ()
+		      (display "register: ")
+		      (display name)
+		      (display " ")
+		      (display contents)
+		      (display " -> ")
+		      (display value)
+		      (newline))))
+	       (set! contents value)))
+	    ((eq? message 'trace-on)
+	     (set! trace #t))
+	    ((eq? message 'trace-off)
+	     (set! trace #f))
+	    ((eq? message 'trace?) trace)
 	    (else
 	     (error "Unknown request -- REGISTER" message))))
     dispatch))
@@ -35,21 +52,60 @@
 (define (make-new-machine)
   (let ((pc (make-register 'pc))
 	(flag (make-register 'flag))
+	(cx (make-register 'cx))
 	(stack (make-stack))
+	(trace-value #f)
 	(the-instruction-sequence '()))
     (let ((the-ops
 	   (list (list 'initialize-stack
 		       (lambda () (stack 'initialize)))
+		 (list 'initialize-register
+		       (lambda () (set-contents! cx 0)))
 		 (list 'print-stack-statistics
 		       (lambda () (stack 'print-statistics)))
 		 (list 'print
-		       (lambda (x) (display x)))
+		       (lambda (x) 
+			 (display x)
+			 (newline)))
 		 (list 'prompt-read
-		       (lambda (msg) (display msg) (read)))))
-;	   (list (list 'initialize-stack
-;		       (lambda () (stack 'initialize)))))
+		       (lambda (msg) (display msg) (read)))
+		 (list 'trace-on
+		       (lambda () (set! trace-value #t)))
+		 (list 'trace-off
+		       (lambda () (set! trace-value #f)))
+		 (list 'clear-cx
+		       (lambda () 
+			 (display "register cx: ")
+			 (display (get-contents cx))
+			 (newline)
+			 (set-contents! cx 0)
+			 (newline)))
+;		 (list 'register-trace-on
+;		       (lambda (reg-name)
+;			 (register-trace reg-name 'on)))
+;		 (list 'register-trace-off
+;		       (lambda (reg-name)
+;			 (register-trace reg-name 'off)))
+		 (list '+ +)
+		 (list '- -)
+		 (list '* *)
+		 (list '/ /)
+		 (list 'remainder remainder)))
 	  (register-table
-	   (list (list 'pc pc) (list 'flag flag))))
+	   (list (list 'pc pc)
+		 (list 'flag flag)
+		 (list 'cx cx))))
+      (define (register-trace reg-name op)
+	(let ((reg-value (assoc (string->symbol reg-name) register-table)))
+	  (if (not reg-value)
+	      (error "Unknown register:" reg-name))
+	  (let ((reg (cadr reg-value)))
+	    (cond ((eq? op 'on)
+		   (reg 'trace-on))
+		  ((eq? op 'off)
+		   (reg 'trace-off))
+		  (else
+		   (error "Unknown operation:" op))))))
       (define (allocate-register name)
 	(if (assoc name register-table)
 	    (error "Multiply defined register:" name)
@@ -62,13 +118,26 @@
 	  (if val
 	      (cadr val)
 	      (error "Unknown register:" name))))
+      (define (count)
+	(set-contents! cx (1+ (get-contents cx))))
+      (define (trace?) trace-value)
       (define (execute)
 	(let ((insts (get-contents pc)))
 	  (if (null? insts)
 	      'done
 	      (begin
 		((instruction-execution-proc (car insts)))
+		(count)
 		(execute)))))
+      (define (initialize)
+	(set! the-ops
+	      (append the-ops
+		      (list (list 'register-trace-on
+				  (lambda (reg-name)
+				    (register-trace reg-name 'on)))
+			    (list 'register-trace-off
+				  (lambda (reg-name)
+				    (register-trace reg-name 'off)))))))
       (define (dispatch message)
 	(cond ((eq? message 'start)
 	       (set-contents! pc the-instruction-sequence)
@@ -81,33 +150,15 @@
 	       (lambda (ops) (set! the-ops (append the-ops ops))))
 	      ((eq? message 'stack) stack)
 	      ((eq? message 'operations) the-ops)
+	      ((eq? message 'trace?) (trace?))
+	      ((eq? message 'initialize)
+	       initialize)
 	      (else (error "Unknown request -- MACHINE" message))))
       dispatch)))
 
 (define (get-register machine reg-name)
   ((machine 'get-register) reg-name))
 	      
-;(define (make-stack)
-;  (let ((s '()))
-;    (define (push x)
-;      (set! s (cons x s)))
-;    (define (pop x)
-;      (if (null? s)
-;	  (error "Empty stack -- POP")
-;	  (let ((top (car s)))
-;	    (set! s (cdr s))
-;	    top)))
-;    (define (initialize)
-;      (set! s '())
-;      'done)
-;    (define (dispatch message)
-;      (cond ((eq? message 'push) push)
-;	    ((eq? message 'pop) pop)
-;	    ((eq? message 'initialize) (initialize))
-;	    (else (error "Unknown request -- STACK"
-;			 message))))
-;    dispatch))
-
 (define (make-stack)
   (let ((s '())
 	(number-pushes 0)
@@ -132,9 +183,9 @@
       (set! current-depth 0)
       'done)
     (define (print-statistics)
-      (newline)
       (display (list 'total-pushes '= number-pushes
-		     'maximum-depth '= max-depth)))
+		     'maximum-depth '= max-depth))
+      (newline))
     (define (dispatch message)
       (cond ((eq? message 'push) push)
 	    ((eq? message 'pop) (pop))
@@ -197,26 +248,29 @@
 (define (update-insts! insts labels machine)
   (let ((pc (get-register machine 'pc))
 	(flag (get-register machine 'flag))
+	(cx (get-register machine 'cx))
 	(stack (machine 'stack))
 	(ops (machine 'operations)))
     (for-each
      (lambda (inst)
-       (set-instruction-execution-proc!
-	inst
-	(make-execution-procedure
-	 (instruction-text inst) labels machine
-	 pc flag stack ops)))
-     insts)))
+	      (set-instruction-execution-proc!
+	       inst
+	       (make-execution-procedure
+		(instruction-text inst) 
+		labels 
+		machine
+		pc
+		flag
+		stack
+		ops)))
+       insts)))
 
 (define (make-instruction text)
   (cons text '()))
-
 (define (instruction-text inst)
   (car inst))
-
 (define (instruction-execution-proc inst)
   (cdr inst))
-
 (define (set-instruction-execution-proc! inst proc)
   (set-cdr! inst proc))
 
@@ -383,7 +437,17 @@
 		(make-primitive-exp e machine labels))
 	      (operation-exp-operands exp))))
     (lambda ()
+      (instruction-trace machine exp)
       (apply op (map (lambda (p) (p)) aprocs)))))
+
+(define (instruction-trace machine exp)
+  (if (machine 'trace?)
+      (trace-display exp)))
+
+(define (trace-display exp)
+  (display "instruction tracing: ")
+  (display exp)
+  (newline))
 
 (define (operation-exp? exp)
   (and (pair? exp) (tagged-list? (car exp) 'op)))
